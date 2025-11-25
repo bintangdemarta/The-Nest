@@ -73,12 +73,25 @@ if (logoutBtn) {
 }
 
 // Dashboard Logic
-async function loadFiles() {
+let currentFolderId = null;
+
+async function loadFiles(folderId = null) {
+    currentFolderId = folderId;
     const fileList = document.getElementById('fileList');
+    const upBtn = document.getElementById('upBtn');
     const token = getToken();
 
+    if (upBtn) {
+        upBtn.style.display = folderId ? 'block' : 'none';
+    }
+
     try {
-        const response = await fetch(`${API_URL}/files`, {
+        let url = `${API_URL}/files`;
+        if (folderId) {
+            url += `?folder_id=${folderId}`;
+        }
+
+        const response = await fetch(url, {
             headers: { 'x-access-token': token }
         });
 
@@ -91,15 +104,25 @@ async function loadFiles() {
         const data = await response.json();
         fileList.innerHTML = '';
 
-        if (data.files.length === 0) {
-            fileList.innerHTML = '<li>No files found.</li>';
+        if (data.files.length === 0 && data.folders.length === 0) {
+            fileList.innerHTML = '<li>No files or folders found.</li>';
             return;
         }
 
+        // Render Folders
+        data.folders.forEach(folder => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <a href="#" onclick="loadFiles(${folder.id}); return false;" class="download-link" style="font-weight: bold;">📁 ${folder.name}</a>
+            `;
+            fileList.appendChild(li);
+        });
+
+        // Render Files
         data.files.forEach(file => {
             const li = document.createElement('li');
             li.innerHTML = `
-                <a href="/file.html?id=${file.id}" class="download-link">${file.filename}</a>
+                <a href="/file.html?id=${file.id}" class="download-link">📄 ${file.filename}</a>
                 <span style="font-size: 0.8rem; color: #666; margin-right: 1rem;">${formatSize(file.size)}</span>
             `;
             fileList.appendChild(li);
@@ -108,6 +131,45 @@ async function loadFiles() {
         console.error('Error loading files:', error);
     }
 }
+
+async function createFolder() {
+    const folderName = document.getElementById('folderName').value;
+    if (!folderName) return;
+
+    const token = getToken();
+    try {
+        const response = await fetch(`${API_URL}/folders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-access-token': token
+            },
+            body: JSON.stringify({
+                name: folderName,
+                parent_id: currentFolderId
+            })
+        });
+
+        if (response.ok) {
+            document.getElementById('folderName').value = '';
+            loadFiles(currentFolderId);
+        } else {
+            alert('Failed to create folder');
+        }
+    } catch (error) {
+        alert('Error creating folder');
+    }
+}
+
+function navigateUp() {
+    // Ideally we should track parent ID, but for simplicity we can just go to root or implement a stack
+    // For now, let's just go to root if we are deep, or we need to fetch parent info.
+    // To keep it simple for this iteration, let's just go to root.
+    loadFiles(null);
+}
+window.createFolder = createFolder;
+window.navigateUp = navigateUp;
+window.loadFiles = loadFiles;
 
 function formatSize(bytes) {
     if (bytes === 0) return '0 B';
@@ -134,9 +196,14 @@ async function loadFileDetails(fileId) {
                 <p><strong>Uploaded:</strong> ${new Date(file.upload_date).toLocaleString()}</p>
                 <div style="margin-top: 2rem;">
                     <a href="${API_URL}/download/${file.filename}" class="btn" target="_blank">Download</a>
+                    <button class="btn" onclick="shareFile(${file.id})" style="background: linear-gradient(45deg, #2ecc71, #27ae60);">Share</button>
                     <button class="delete-btn btn" onclick="deleteFile('${file.filename}', true)">Delete</button>
                 </div>
             `;
+
+            if (file.share_token) {
+                showShareLink(file.share_token);
+            }
         } else {
             detailsDiv.innerHTML = '<p>File not found.</p>';
         }
@@ -144,6 +211,33 @@ async function loadFileDetails(fileId) {
         detailsDiv.innerHTML = '<p>Error loading details.</p>';
     }
 }
+
+async function shareFile(fileId) {
+    const token = getToken();
+    try {
+        const response = await fetch(`${API_URL}/files/${fileId}/share`, {
+            method: 'POST',
+            headers: { 'x-access-token': token }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showShareLink(data.share_token);
+        } else {
+            alert('Failed to share file');
+        }
+    } catch (error) {
+        alert('Error sharing file');
+    }
+}
+
+function showShareLink(token) {
+    const shareSection = document.getElementById('shareSection');
+    const shareLink = document.getElementById('shareLink');
+    shareSection.style.display = 'block';
+    shareLink.value = `${window.location.origin}/shared/${token}`;
+}
+window.shareFile = shareFile;
 
 async function deleteFile(filename, redirect = false) {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
@@ -159,7 +253,7 @@ async function deleteFile(filename, redirect = false) {
             if (redirect) {
                 window.location.href = '/dashboard.html';
             } else {
-                loadFiles();
+                loadFiles(currentFolderId);
             }
         } else {
             alert('Failed to delete file');
@@ -181,6 +275,9 @@ if (uploadForm) {
 
         const formData = new FormData();
         formData.append('file', file);
+        if (currentFolderId) {
+            formData.append('folder_id', currentFolderId);
+        }
 
         const token = getToken();
         const messageDiv = document.getElementById('message');
@@ -197,7 +294,7 @@ if (uploadForm) {
             if (response.ok) {
                 messageDiv.innerHTML = `<span style="color: green">${data.message}</span>`;
                 fileInput.value = '';
-                loadFiles();
+                loadFiles(currentFolderId);
             } else {
                 messageDiv.innerHTML = `<span style="color: red">${data.message}</span>`;
             }

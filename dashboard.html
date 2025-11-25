@@ -9,22 +9,31 @@
 </head>
 
 <body>
-    <div class="container" style="max-width: 800px;">
+    <div class="container wide">
         <div class="header">
             <h2>My Files</h2>
             <button id="logoutBtn">Logout</button>
         </div>
 
         <div class="upload-section">
-            <h3>Upload File</h3>
-            <form id="uploadForm">
-                <input type="file" id="fileInput" required>
-                <button type="submit">Upload</button>
-            </form>
+            <h3>Actions</h3>
+            <div style="display: flex; gap: 1rem;">
+                <form id="uploadForm" style="flex: 1;">
+                    <input type="file" id="fileInput" required>
+                    <button type="submit">Upload File</button>
+                </form>
+                <div style="flex: 1;">
+                    <input type="text" id="folderName" placeholder="New Folder Name">
+                    <button onclick="createFolder()">Create Folder</button>
+                </div>
+            </div>
         </div>
 
         <div class="files-section">
-            <h3>Files</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Files</h3>
+                <button id="upBtn" onclick="navigateUp()" style="width: auto; display: none;">&uarr; Up</button>
+            </div>
             <ul id="fileList">
                 <!-- Files will be populated here -->
             </ul>

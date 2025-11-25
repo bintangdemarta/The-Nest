@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify, send_from_directory, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 import jwt
+import uuid
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -25,6 +26,15 @@ class User(db.Model):
     username = db.Column(db.String(20), unique=True, nullable=False)
     password = db.Column(db.String(60), nullable=False)
     files = db.relationship('File', backref='owner', lazy=True)
+    folders = db.relationship('Folder', backref='owner', lazy=True)
+
+class Folder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
+    subfolders = db.relationship('Folder', backref=db.backref('parent', remote_side=[id]), lazy=True)
+    files = db.relationship('File', backref='folder', lazy=True)
 
 class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -32,6 +42,8 @@ class File(db.Model):
     size = db.Column(db.Integer, nullable=False, default=0)
     upload_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
+    share_token = db.Column(db.String(100), unique=True, nullable=True)
 
 # Decorator for token auth
 def token_required(f):
@@ -96,6 +108,11 @@ def upload_file(current_user):
     if 'file' not in request.files:
         return jsonify({'message': 'No file part'}), 400
     file = request.files['file']
+    folder_id = request.form.get('folder_id')
+    
+    if folder_id == 'null' or folder_id == 'undefined':
+        folder_id = None
+
     if file.filename == '':
         return jsonify({'message': 'No selected file'}), 400
     if file:
@@ -104,15 +121,15 @@ def upload_file(current_user):
         user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(current_user.id))
         os.makedirs(user_folder, exist_ok=True)
         
-        # Check if file already exists for this user
-        existing_file = File.query.filter_by(user_id=current_user.id, filename=filename).first()
+        # Check if file already exists for this user in this folder
+        existing_file = File.query.filter_by(user_id=current_user.id, filename=filename, folder_id=folder_id).first()
         if existing_file:
              return jsonify({'message': 'File already exists'}), 409
 
         file.save(os.path.join(user_folder, filename))
         
         file_size = os.path.getsize(os.path.join(user_folder, filename))
-        new_file = File(filename=filename, owner=current_user, size=file_size)
+        new_file = File(filename=filename, owner=current_user, size=file_size, folder_id=folder_id)
         db.session.add(new_file)
         db.session.commit()
         return jsonify({'message': 'File uploaded successfully'}), 201
@@ -120,17 +137,48 @@ def upload_file(current_user):
 @app.route('/api/files', methods=['GET'])
 @token_required
 def get_files(current_user):
-    files = File.query.filter_by(user_id=current_user.id).all()
-    output = []
+    folder_id = request.args.get('folder_id')
+    if folder_id == 'null' or folder_id == 'undefined':
+        folder_id = None
+        
+    files = File.query.filter_by(user_id=current_user.id, folder_id=folder_id).all()
+    folders = Folder.query.filter_by(user_id=current_user.id, parent_id=folder_id).all()
+    
+    output = {'files': [], 'folders': []}
+    
+    for folder in folders:
+        folder_data = {
+            'id': folder.id,
+            'name': folder.name,
+            'type': 'folder'
+        }
+        output['folders'].append(folder_data)
+
     for file in files:
         file_data = {
             'id': file.id,
             'filename': file.filename,
             'size': file.size,
-            'upload_date': file.upload_date.isoformat()
+            'upload_date': file.upload_date.isoformat(),
+            'type': 'file'
         }
-        output.append(file_data)
-    return jsonify({'files': output})
+        output['files'].append(file_data)
+    return jsonify(output)
+
+@app.route('/api/folders', methods=['POST'])
+@token_required
+def create_folder(current_user):
+    data = request.get_json()
+    name = data.get('name')
+    parent_id = data.get('parent_id')
+    
+    if not name:
+        return jsonify({'message': 'Folder name required'}), 400
+        
+    new_folder = Folder(name=name, owner=current_user, parent_id=parent_id)
+    db.session.add(new_folder)
+    db.session.commit()
+    return jsonify({'message': 'Folder created'}), 201
 
 @app.route('/api/files/<int:file_id>', methods=['GET'])
 @token_required
@@ -143,9 +191,32 @@ def get_file_details(current_user, file_id):
         'id': file.id,
         'filename': file.filename,
         'size': file.size,
-        'upload_date': file.upload_date.isoformat()
+        'upload_date': file.upload_date.isoformat(),
+        'share_token': file.share_token
     }
     return jsonify(file_data)
+
+@app.route('/api/files/<int:file_id>/share', methods=['POST'])
+@token_required
+def share_file(current_user, file_id):
+    file = File.query.filter_by(user_id=current_user.id, id=file_id).first()
+    if not file:
+        return jsonify({'message': 'File not found'}), 404
+    
+    if not file.share_token:
+        file.share_token = str(uuid.uuid4())
+        db.session.commit()
+        
+    return jsonify({'share_token': file.share_token})
+
+@app.route('/shared/<token>', methods=['GET'])
+def download_shared_file(token):
+    file = File.query.filter_by(share_token=token).first()
+    if not file:
+        return jsonify({'message': 'File not found or link expired'}), 404
+        
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(file.user_id))
+    return send_from_directory(user_folder, file.filename, as_attachment=True)
 
 @app.route('/api/download/<filename>', methods=['GET'])
 @token_required

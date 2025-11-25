@@ -11,6 +11,7 @@ class TestAPI(unittest.TestCase):
         app.config['UPLOAD_FOLDER'] = 'test_uploads'
         self.app = app.test_client()
         with app.app_context():
+            db.drop_all()
             db.create_all()
         os.makedirs('test_uploads', exist_ok=True)
 
@@ -69,6 +70,48 @@ class TestAPI(unittest.TestCase):
         data = json.loads(response.data)
         self.assertEqual(data['filename'], 'test_file.txt')
         self.assertEqual(data['size'], 12)
+
+    def test_folders_and_sharing(self):
+        token = self.test_login()
+        headers = {'x-access-token': token}
+        
+        # Create folder
+        response = self.app.post('/api/folders', headers=headers, json={'name': 'My Folder'})
+        self.assertEqual(response.status_code, 201)
+        
+        # Get folders
+        response = self.app.get('/api/files', headers=headers)
+        data = json.loads(response.data)
+        self.assertEqual(len(data['folders']), 1)
+        self.assertEqual(data['folders'][0]['name'], 'My Folder')
+        folder_id = data['folders'][0]['id']
+        
+        # Upload file to folder
+        data = {
+            'file': (io.BytesIO(b'file in folder'), 'nested.txt'),
+            'folder_id': folder_id
+        }
+        response = self.app.post('/api/upload', headers=headers, data=data, content_type='multipart/form-data')
+        self.assertEqual(response.status_code, 201)
+        
+        # List files in folder
+        response = self.app.get(f'/api/files?folder_id={folder_id}', headers=headers)
+        data = json.loads(response.data)
+        self.assertEqual(len(data['files']), 1)
+        self.assertEqual(data['files'][0]['filename'], 'nested.txt')
+        
+        # Share file
+        file_id = data['files'][0]['id']
+        response = self.app.post(f'/api/files/{file_id}/share', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        share_data = json.loads(response.data)
+        self.assertTrue('share_token' in share_data)
+        token = share_data['share_token']
+        
+        # Download shared file
+        response = self.app.get(f'/shared/{token}')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b'file in folder')
 
 if __name__ == '__main__':
     unittest.main()
