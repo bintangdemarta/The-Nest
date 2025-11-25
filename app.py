@@ -29,6 +29,8 @@ class User(db.Model):
 class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), nullable=False)
+    size = db.Column(db.Integer, nullable=False, default=0)
+    upload_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 # Decorator for token auth
@@ -109,7 +111,8 @@ def upload_file(current_user):
 
         file.save(os.path.join(user_folder, filename))
         
-        new_file = File(filename=filename, owner=current_user)
+        file_size = os.path.getsize(os.path.join(user_folder, filename))
+        new_file = File(filename=filename, owner=current_user, size=file_size)
         db.session.add(new_file)
         db.session.commit()
         return jsonify({'message': 'File uploaded successfully'}), 201
@@ -120,9 +123,29 @@ def get_files(current_user):
     files = File.query.filter_by(user_id=current_user.id).all()
     output = []
     for file in files:
-        file_data = {'filename': file.filename}
+        file_data = {
+            'id': file.id,
+            'filename': file.filename,
+            'size': file.size,
+            'upload_date': file.upload_date.isoformat()
+        }
         output.append(file_data)
     return jsonify({'files': output})
+
+@app.route('/api/files/<int:file_id>', methods=['GET'])
+@token_required
+def get_file_details(current_user, file_id):
+    file = File.query.filter_by(user_id=current_user.id, id=file_id).first()
+    if not file:
+        return jsonify({'message': 'File not found'}), 404
+    
+    file_data = {
+        'id': file.id,
+        'filename': file.filename,
+        'size': file.size,
+        'upload_date': file.upload_date.isoformat()
+    }
+    return jsonify(file_data)
 
 @app.route('/api/download/<filename>', methods=['GET'])
 @token_required

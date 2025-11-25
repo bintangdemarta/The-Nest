@@ -99,8 +99,8 @@ async function loadFiles() {
         data.files.forEach(file => {
             const li = document.createElement('li');
             li.innerHTML = `
-                <a href="${API_URL}/download/${file.filename}" class="download-link" target="_blank">${file.filename}</a>
-                <button class="delete-btn" onclick="deleteFile('${file.filename}')">Delete</button>
+                <a href="/file.html?id=${file.id}" class="download-link">${file.filename}</a>
+                <span style="font-size: 0.8rem; color: #666; margin-right: 1rem;">${formatSize(file.size)}</span>
             `;
             fileList.appendChild(li);
         });
@@ -109,7 +109,43 @@ async function loadFiles() {
     }
 }
 
-async function deleteFile(filename) {
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function loadFileDetails(fileId) {
+    const detailsDiv = document.getElementById('fileDetails');
+    const token = getToken();
+
+    try {
+        const response = await fetch(`${API_URL}/files/${fileId}`, {
+            headers: { 'x-access-token': token }
+        });
+
+        if (response.ok) {
+            const file = await response.json();
+            detailsDiv.innerHTML = `
+                <h3>${file.filename}</h3>
+                <p><strong>Size:</strong> ${formatSize(file.size)}</p>
+                <p><strong>Uploaded:</strong> ${new Date(file.upload_date).toLocaleString()}</p>
+                <div style="margin-top: 2rem;">
+                    <a href="${API_URL}/download/${file.filename}" class="btn" target="_blank">Download</a>
+                    <button class="delete-btn btn" onclick="deleteFile('${file.filename}', true)">Delete</button>
+                </div>
+            `;
+        } else {
+            detailsDiv.innerHTML = '<p>File not found.</p>';
+        }
+    } catch (error) {
+        detailsDiv.innerHTML = '<p>Error loading details.</p>';
+    }
+}
+
+async function deleteFile(filename, redirect = false) {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
 
     const token = getToken();
@@ -120,7 +156,11 @@ async function deleteFile(filename) {
         });
 
         if (response.ok) {
-            loadFiles();
+            if (redirect) {
+                window.location.href = '/dashboard.html';
+            } else {
+                loadFiles();
+            }
         } else {
             alert('Failed to delete file');
         }

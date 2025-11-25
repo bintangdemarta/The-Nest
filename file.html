@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Details - The Nest</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>File Details</h2>
+            <a href="/dashboard.html" class="btn" style="width: auto;">Back</a>
+        </div>
+
+        <div id="fileDetails">
+            <p>Loading...</p>
+        </div>
+
+        <div id="message"></div>
+    </div>
+    <script src="/static/js/main.js"></script>
+    <script>
+        if (!localStorage.getItem('token')) {
+            window.location.href = '/login.html';
+        } else {
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileId = urlParams.get('id');
+            if (fileId) {
+                loadFileDetails(fileId);
+            } else {
+                document.getElementById('fileDetails').innerHTML = '<p>No file specified.</p>';
+            }
+        }
+    </script>
+</body>
+
+</html>

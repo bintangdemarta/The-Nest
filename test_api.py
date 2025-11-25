@@ -59,6 +59,16 @@ class TestAPI(unittest.TestCase):
         data = json.loads(response.data)
         self.assertEqual(len(data['files']), 1)
         self.assertEqual(data['files'][0]['filename'], 'test_file.txt')
+        self.assertEqual(data['files'][0]['size'], 12) # 'test content' is 12 bytes
+        self.assertTrue('upload_date' in data['files'][0])
+        
+        # Test details endpoint
+        file_id = data['files'][0]['id']
+        response = self.app.get(f'/api/files/{file_id}', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data['filename'], 'test_file.txt')
+        self.assertEqual(data['size'], 12)
 
 if __name__ == '__main__':
     unittest.main()
