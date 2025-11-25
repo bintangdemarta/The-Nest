@@ -4,69 +4,73 @@
 ![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Framework](https://img.shields.io/badge/framework-Flask-black.svg)
 
-**The Nest** adalah server *cloud storage* pribadi yang minimalis dan aman, dibangun dari nol menggunakan Python dan Flask. Proyek ini dirancang untuk memberikan kontrol penuh atas data Anda, memungkinkan Anda untuk menyimpan, mengelola, dan mengakses file dengan aman dari antarmuka web yang bersih.
+**The Nest** is a minimalist and secure personal *cloud storage* server built from scratch using Python and Flask. This project is designed to give you full control over your data, allowing you to store, manage, and access files safely through a clean and simple web interface.
 
 ---
-## 📖 Daftar Isi
-- [Filosofi Proyek](#-filosofi-proyek)
-- [Fitur Utama](#-fitur-utama)
-- [Tumpukan Teknologi](#-tumpukan-teknologi)
-- [Instalasi & Konfigurasi](#-instalasi--konfigurasi)
-- [Dokumentasi API](#-dokumentasi-api)
+
+## 📖 Table of Contents
+- [Project Philosophy](#-project-philosophy)
+- [Key Features](#-key-features)
+- [Technology Stack](#-technology-stack)
+- [Installation & Configuration](#-installation--configuration)
+- [API Documentation](#-api-documentation)
 - [Roadmap](#-roadmap)
-- [Kontribusi](#-kontribusi)
-- [Lisensi](#-lisensi)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
-## 💡 Filosofi Proyek
-Di era di mana data adalah komoditas, "The Nest" dibangun di atas gagasan kedaulatan data. Tujuannya adalah untuk menyediakan alternatif yang transparan dan dapat dikontrol sendiri dibandingkan layanan cloud komersial, sekaligus menjadi proyek pembelajaran yang sangat baik untuk pengembangan aplikasi web full-stack.
+
+## 💡 Project Philosophy
+In an era where data is a commodity, **The Nest** is built on the idea of data sovereignty. Its goal is to provide a transparent and self-controlled alternative to commercial cloud services, while also serving as an excellent learning project for full-stack web application development.
 
 ---
-## ✨ Fitur Utama
-- **🔐 Otentikasi Aman:** Sistem registrasi & login berbasis token (JWT) dengan hashing password (Bcrypt).
-- **👤 Penyimpanan Terisolasi:** Setiap pengguna memiliki ruang penyimpanan pribadi. File tidak dapat diakses oleh pengguna lain.
-- **⚡ Operasi File Lengkap (CRUD):** Fungsionalitas untuk **Upload**, **List** (melihat daftar), **Download**, dan **Delete** file.
-- **🌐 Antarmuka Web Responsif:** Halaman terpisah untuk otentikasi (login/registrasi) dan dasbor file utama.
-- **🧩 API RESTful:** Backend terstruktur yang jelas, memudahkan integrasi dengan klien lain di masa depan (misalnya, aplikasi mobile atau desktop).
+
+## ✨ Key Features
+- **🔐 Secure Authentication:** Token-based registration & login system (JWT) with password hashing (Bcrypt).
+- **👤 Isolated Storage:** Each user has their own private storage space. Files cannot be accessed by other users.
+- **⚡ Full File Operations (CRUD):** Support for **Upload**, **List**, **Download**, and **Delete**.
+- **🌐 Responsive Web Interface:** Separate pages for authentication (login/register) and the main file dashboard.
+- **🧩 RESTful API:** Cleanly structured backend, making it easy to integrate with future clients like mobile or desktop apps.
 
 ---
-## 🛠️ Tumpukan Teknologi
-* **Backend:** Python 3, Flask, Flask-SQLAlchemy, Flask-Bcrypt, PyJWT
-* **Database:** SQLite (untuk kemudahan pengembangan)
+
+## 🛠️ Technology Stack
+* **Backend:** Python 3, Flask, Flask-SQLAlchemy, Flask-Bcrypt, PyJWT  
+* **Database:** SQLite (for development simplicity)  
 * **Frontend:** HTML5, CSS3, JavaScript (Fetch API)
 
 ---
-## 🚀 Instalasi & Konfigurasi
 
-### Prasyarat
+## 🚀 Installation & Configuration
+
+### Prerequisites
 - Python 3.8+
 - Git
 
-### Langkah-langkah
-1.  **Clone Repositori:**
+### Steps
+
+1. **Clone the Repository**
     ```bash
-    git clone [https://github.com/NAMA_USER_ANDA/the-nest.git](https://github.com/NAMA_USER_ANDA/the-nest.git)
+    git clone https://github.com/YOUR_USERNAME/the-nest.git
     cd the-nest
     ```
 
-2.  **Buat Lingkungan Virtual & Instal Dependensi:**
+2. **Create Virtual Environment & Install Dependencies**
     ```bash
     python3 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
     ```
-    *(Catatan: Anda perlu membuat file `requirements.txt` terlebih dahulu dengan `pip freeze > requirements.txt`)*
+    *(Note: You must create `requirements.txt` using `pip freeze > requirements.txt`.)*
 
-3.  **Konfigurasi Aplikasi:**
-    Di dalam file `app.py`, pastikan Anda mengubah `SECRET_KEY` menjadi string acak yang panjang dan unik.
+3. **Configure the Application**
+    Edit the `app.py` file and replace the `SECRET_KEY` with a long, unique, random string:
     ```python
-    app.config['SECRET_KEY'] = 'ganti-dengan-kunci-rahasia-yang-sangat-sulit-ditebak'
+    app.config['SECRET_KEY'] = 'replace-with-a-very-hard-to-guess-secret-key'
     ```
 
-4.  **Inisialisasi Database:**
-    Jalankan perintah ini satu kali untuk membuat file `database.db`.
+4. **Initialize the Database**
     ```bash
-    # Buka Python shell
     python
     ```
     ```python
@@ -77,37 +81,52 @@ Di era di mana data adalah komoditas, "The Nest" dibangun di atas gagasan kedaul
     >>> exit()
     ```
 
-5.  **Jalankan Server:**
-    * **Terminal 1 (Backend):** `flask run --host=0.0.0.0`
-    * **Terminal 2 (Frontend):** `python3 -m http.server 8000`
+5. **Run the Server**
+    - **Backend:**  
+      ```bash
+      flask run --host=0.0.0.0
+      ```
+    - **Frontend:**  
+      ```bash
+      python3 -m http.server 8000
+      ```
 
-6.  **Akses Aplikasi:** Buka browser dan kunjungi `http://127.0.0.1:8000/register.html`.
-
----
-## 📋 Dokumentasi API
-
-Semua *endpoint* yang memerlukan otentikasi harus menyertakan token di header: `x-access-token: <TOKEN_JWT_ANDA>`.
-
-| Method | Endpoint                    | Deskripsi                               | Memerlukan Token? |
-| :----- | :-------------------------- | :-------------------------------------- | :---------------: |
-| `POST` | `/api/register`             | Mendaftarkan pengguna baru.             |        Tidak      |
-| `POST` | `/api/login`                | Login dan mendapatkan token JWT.        |        Tidak      |
-| `POST` | `/api/upload`               | Mengunggah file baru.                   |         Ya        |
-| `GET`  | `/api/files`                | Mendapatkan daftar file milik pengguna. |         Ya        |
-| `GET`  | `/api/download/<filename>`  | Mengunduh file tertentu.                |         Ya        |
-| `DELETE`| `/api/files/<filename>`   | Menghapus file tertentu.                |         Ya        |
+6. **Access the Application**
+   Open in browser:  
+   `http://127.0.0.1:8000/register.html`
 
 ---
+
+## 📋 API Documentation
+
+All authenticated endpoints require a token in the header:
+
+`x-access-token: <YOUR_JWT_TOKEN>`
+
+| Method | Endpoint                    | Description                                  | Token Required? |
+|--------|-----------------------------|-----------------------------------------------|-----------------|
+| `POST` | `/api/register`             | Register a new user                           | No              |
+| `POST` | `/api/login`                | Log in and receive JWT token                  | No              |
+| `POST` | `/api/upload`               | Upload a new file                             | Yes             |
+| `GET`  | `/api/files`                | Get list of user-owned files                  | Yes             |
+| `GET`  | `/api/download/<filename>`  | Download a specific file                      | Yes             |
+| `DELETE` | `/api/files/<filename>`   | Delete a specific file                        | Yes             |
+
+---
+
 ## 🗺️ Roadmap
--   [ ] **Aplikasi Klien Android:** Membangun aplikasi native untuk sinkronisasi dan unggah otomatis.
--   [ ] **Dukungan Folder:** Kemampuan untuk membuat dan mengelola direktori.
--   [ ] **Peningkatan UI/UX:** Mengintegrasikan framework CSS seperti Bootstrap atau Tailwind CSS.
--   [ ] **Berbagi File:** Membuat tautan berbagi yang aman untuk file.
+- [ ] **Android Client App:** Sync and auto-upload features.
+- [ ] **Folder Support:** Create and manage directories.
+- [ ] **UI/UX Improvements:** Add Bootstrap or Tailwind CSS.
+- [ ] **File Sharing:** Secure shareable links.
 
 ---
-## 🙌 Kontribusi
-Kontribusi, isu, dan permintaan fitur sangat diterima! Jangan ragu untuk membuat *fork* repositori ini dan membuka *pull request*.
+
+## 🙌 Contributing
+Contributions, issues, and feature requests are welcome! Feel free to fork the repo and open a pull request.
 
 ---
-## 📜 Lisensi
-Proyek ini dilisensikan di bawah **MIT License**. Lihat file `LICENSE` untuk detail lebih lanjut.
+
+## 📜 License
+This project is licensed under the **MIT License**.  
+See the `LICENSE` file for more information.
