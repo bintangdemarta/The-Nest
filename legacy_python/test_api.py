@@ -113,5 +113,41 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, b'file in folder')
 
+    def test_search_and_swagger(self):
+        token = self.test_login()
+        headers = {'x-access-token': token}
+        
+        # Upload files for search
+        data = {'file': (io.BytesIO(b'search me'), 'find_this.txt')}
+        self.app.post('/api/upload', headers=headers, data=data, content_type='multipart/form-data')
+        
+        data = {'file': (io.BytesIO(b'ignore me'), 'ignore_this.txt')}
+        self.app.post('/api/upload', headers=headers, data=data, content_type='multipart/form-data')
+        
+        # Search
+        response = self.app.get('/api/files?search=find', headers=headers)
+        data = json.loads(response.data)
+        self.assertEqual(len(data['files']), 1)
+        self.assertEqual(data['files'][0]['filename'], 'find_this.txt')
+        
+        # Swagger
+        response = self.app.get('/api/swagger.json')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data['swagger'], '2.0')
+
+    def test_pwa_files(self):
+        # Check manifest
+        response = self.app.get('/static/manifest.json')
+        self.assertEqual(response.status_code, 200)
+        
+        # Check service worker
+        response = self.app.get('/static/sw.js')
+        self.assertEqual(response.status_code, 200)
+        
+        # Check icon
+        response = self.app.get('/static/images/icon.png')
+        self.assertEqual(response.status_code, 200)
+
 if __name__ == '__main__':
     unittest.main()

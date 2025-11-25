@@ -1,5 +1,14 @@
 const API_URL = '/api';
 
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js')
+            .then(registration => console.log('SW registered'))
+            .catch(err => console.log('SW registration failed: ', err));
+    });
+}
+
 // Helper to get token
 function getToken() {
     return localStorage.getItem('token');
@@ -74,21 +83,42 @@ if (logoutBtn) {
 
 // Dashboard Logic
 let currentFolderId = null;
+let searchTimeout = null;
 
-async function loadFiles(folderId = null) {
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        const query = document.getElementById('searchInput').value;
+        loadFiles(currentFolderId, query);
+    }, 300);
+}
+
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function loadFiles(folderId = null, searchQuery = '') {
     currentFolderId = folderId;
     const fileList = document.getElementById('fileList');
     const upBtn = document.getElementById('upBtn');
     const token = getToken();
 
     if (upBtn) {
-        upBtn.style.display = folderId ? 'block' : 'none';
+        upBtn.style.display = (folderId && !searchQuery) ? 'block' : 'none';
     }
 
     try {
         let url = `${API_URL}/files`;
-        if (folderId) {
-            url += `?folder_id=${folderId}`;
+        const params = new URLSearchParams();
+        if (folderId) params.append('folder_id', folderId);
+        if (searchQuery) params.append('search', searchQuery);
+
+        if (Array.from(params).length > 0) {
+            url += `?${params.toString()}`;
         }
 
         const response = await fetch(url, {
@@ -102,31 +132,33 @@ async function loadFiles(folderId = null) {
         }
 
         const data = await response.json();
-        fileList.innerHTML = '';
+        if (fileList) {
+            fileList.innerHTML = '';
 
-        if (data.files.length === 0 && data.folders.length === 0) {
-            fileList.innerHTML = '<li>No files or folders found.</li>';
-            return;
+            if (data.files.length === 0 && data.folders.length === 0) {
+                fileList.innerHTML = '<li>No files or folders found.</li>';
+                return;
+            }
+
+            // Render Folders
+            data.folders.forEach(folder => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="#" onclick="loadFiles(${folder.id}); return false;" class="download-link" style="font-weight: bold;">📁 ${folder.name}</a>
+                `;
+                fileList.appendChild(li);
+            });
+
+            // Render Files
+            data.files.forEach(file => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="/file.html?id=${file.id}" class="download-link">📄 ${file.filename}</a>
+                    <span style="font-size: 0.8rem; color: #666; margin-right: 1rem;">${formatSize(file.size)}</span>
+                `;
+                fileList.appendChild(li);
+            });
         }
-
-        // Render Folders
-        data.folders.forEach(folder => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <a href="#" onclick="loadFiles(${folder.id}); return false;" class="download-link" style="font-weight: bold;">📁 ${folder.name}</a>
-            `;
-            fileList.appendChild(li);
-        });
-
-        // Render Files
-        data.files.forEach(file => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <a href="/file.html?id=${file.id}" class="download-link">📄 ${file.filename}</a>
-                <span style="font-size: 0.8rem; color: #666; margin-right: 1rem;">${formatSize(file.size)}</span>
-            `;
-            fileList.appendChild(li);
-        });
     } catch (error) {
         console.error('Error loading files:', error);
     }
@@ -162,25 +194,12 @@ async function createFolder() {
 }
 
 function navigateUp() {
-    // Ideally we should track parent ID, but for simplicity we can just go to root or implement a stack
-    // For now, let's just go to root if we are deep, or we need to fetch parent info.
-    // To keep it simple for this iteration, let's just go to root.
     loadFiles(null);
-}
-window.createFolder = createFolder;
-window.navigateUp = navigateUp;
-window.loadFiles = loadFiles;
-
-function formatSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 async function loadFileDetails(fileId) {
     const detailsDiv = document.getElementById('fileDetails');
+    const previewSection = document.getElementById('previewSection');
     const token = getToken();
 
     try {
@@ -204,6 +223,25 @@ async function loadFileDetails(fileId) {
             if (file.share_token) {
                 showShareLink(file.share_token);
             }
+
+            // Preview Logic
+            const ext = file.filename.split('.').pop().toLowerCase();
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                previewSection.style.display = 'block';
+                previewSection.innerHTML = `<img src="${API_URL}/download/${file.filename}" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">`;
+            } else if (['txt', 'md', 'py', 'js', 'html', 'css', 'json'].includes(ext)) {
+                try {
+                    const textResponse = await fetch(`${API_URL}/download/${file.filename}`, {
+                        headers: { 'x-access-token': token }
+                    });
+                    const text = await textResponse.text();
+                    previewSection.style.display = 'block';
+                    previewSection.innerHTML = `<pre style="text-align: left; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; overflow-x: auto;">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+                } catch (e) {
+                    console.error('Failed to load text preview');
+                }
+            }
+
         } else {
             detailsDiv.innerHTML = '<p>File not found.</p>';
         }
@@ -211,6 +249,12 @@ async function loadFileDetails(fileId) {
         detailsDiv.innerHTML = '<p>Error loading details.</p>';
     }
 }
+
+window.createFolder = createFolder;
+window.navigateUp = navigateUp;
+window.loadFiles = loadFiles;
+window.debounceSearch = debounceSearch;
+window.loadFileDetails = loadFileDetails;
 
 async function shareFile(fileId) {
     const token = getToken();

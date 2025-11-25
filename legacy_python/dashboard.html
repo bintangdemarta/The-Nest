@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - The Nest</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
 </head>
 
 <body>
@@ -17,6 +19,9 @@
 
         <div class="upload-section">
             <h3>Actions</h3>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <input type="text" id="searchInput" placeholder="Search files..." oninput="debounceSearch()">
+            </div>
             <div style="display: flex; gap: 1rem;">
                 <form id="uploadForm" style="flex: 1;">
                     <input type="file" id="fileInput" required>

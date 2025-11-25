@@ -138,11 +138,24 @@ def upload_file(current_user):
 @token_required
 def get_files(current_user):
     folder_id = request.args.get('folder_id')
+    search_query = request.args.get('search')
+
     if folder_id == 'null' or folder_id == 'undefined':
         folder_id = None
         
-    files = File.query.filter_by(user_id=current_user.id, folder_id=folder_id).all()
-    folders = Folder.query.filter_by(user_id=current_user.id, parent_id=folder_id).all()
+    query = File.query.filter_by(user_id=current_user.id)
+    
+    if search_query:
+        query = query.filter(File.filename.ilike(f'%{search_query}%'))
+    else:
+        query = query.filter_by(folder_id=folder_id)
+        
+    files = query.all()
+    
+    if search_query:
+        folders = [] # Don't show folders in search results for simplicity, or filter them too
+    else:
+        folders = Folder.query.filter_by(user_id=current_user.id, parent_id=folder_id).all()
     
     output = {'files': [], 'folders': []}
     
@@ -242,7 +255,57 @@ def delete_file(current_user, filename):
         
     db.session.delete(file)
     db.session.commit()
+    db.session.delete(file)
+    db.session.commit()
     return jsonify({'message': 'File deleted'})
+
+@app.route('/api/swagger.json')
+def swagger_spec():
+    return jsonify({
+        "swagger": "2.0",
+        "info": {
+            "title": "The Nest API",
+            "version": "1.0.0",
+            "description": "API documentation for The Nest Personal Cloud"
+        },
+        "basePath": "/api",
+        "securityDefinitions": {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "x-access-token",
+                "in": "header"
+            }
+        },
+        "security": [{"Bearer": []}],
+        "paths": {
+            "/files": {
+                "get": {
+                    "summary": "List files",
+                    "parameters": [
+                        {"name": "folder_id", "in": "query", "type": "integer"},
+                        {"name": "search", "in": "query", "type": "string"}
+                    ],
+                    "responses": {
+                        "200": {"description": "List of files and folders"}
+                    }
+                }
+            },
+            "/upload": {
+                "post": {
+                    "summary": "Upload file",
+                    "consumes": ["multipart/form-data"],
+                    "parameters": [
+                        {"name": "file", "in": "formData", "type": "file", "required": True},
+                        {"name": "folder_id", "in": "formData", "type": "integer"}
+                    ],
+                    "responses": {
+                        "201": {"description": "File uploaded"}
+                    }
+                }
+            }
+            # Add more endpoints as needed
+        }
+    })
 
 if __name__ == '__main__':
     with app.app_context():
