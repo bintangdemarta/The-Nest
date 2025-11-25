@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - The Nest</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container" style="max-width: 800px;">
+        <div class="header">
+            <h2>My Files</h2>
+            <button id="logoutBtn">Logout</button>
+        </div>
+
+        <div class="upload-section">
+            <h3>Upload File</h3>
+            <form id="uploadForm">
+                <input type="file" id="fileInput" required>
+                <button type="submit">Upload</button>
+            </form>
+        </div>
+
+        <div class="files-section">
+            <h3>Files</h3>
+            <ul id="fileList">
+                <!-- Files will be populated here -->
+            </ul>
+        </div>
+        <div id="message"></div>
+    </div>
+    <script src="/static/js/main.js"></script>
+    <script>
+        // Check auth on load
+        if (!localStorage.getItem('token')) {
+            window.location.href = '/login.html';
+        } else {
+            loadFiles();
+        }
+    </script>
+</body>
+
+</html>

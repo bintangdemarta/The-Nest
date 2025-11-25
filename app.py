@@ -1,0 +1,156 @@
+import os
+import datetime
+from functools import wraps
+from flask import Flask, request, jsonify, send_from_directory, make_response
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+import jwt
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__, static_folder='.', static_url_path='')
+app.config['SECRET_KEY'] = 'replace-with-a-very-hard-to-guess-secret-key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max limit
+
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+
+# Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    password = db.Column(db.String(60), nullable=False)
+    files = db.relationship('File', backref='owner', lazy=True)
+
+class File(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(100), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+# Decorator for token auth
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.filter_by(id=data['user_id']).first()
+        except:
+            return jsonify({'message': 'Token is invalid!'}), 401
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# Routes
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
+
+@app.route('/<path:path>')
+def static_proxy(path):
+    # Serve static files but exclude sensitive ones if necessary
+    if path.endswith('.py') or path.endswith('.db') or path.endswith('.txt'):
+         return make_response("Access denied", 403)
+    return send_from_directory('.', path)
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'message': 'Missing username or password'}), 400
+        
+    hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+    new_user = User(username=data['username'], password=hashed_password)
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({'message': 'Registered successfully!'}), 201
+    except:
+        return jsonify({'message': 'Username already exists!'}), 400
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    auth = request.get_json()
+    if not auth or not auth.get('username') or not auth.get('password'):
+        return make_response('Could not verify', 401)
+    
+    user = User.query.filter_by(username=auth['username']).first()
+    if user and bcrypt.check_password_hash(user.password, auth['password']):
+        token = jwt.encode({'user_id': user.id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, app.config['SECRET_KEY'], algorithm="HS256")
+        return jsonify({'token': token})
+    
+    return make_response('Could not verify', 401)
+
+@app.route('/api/upload', methods=['POST'])
+@token_required
+def upload_file(current_user):
+    if 'file' not in request.files:
+        return jsonify({'message': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'message': 'No selected file'}), 400
+    if file:
+        filename = secure_filename(file.filename)
+        # Ensure user directory exists
+        user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(current_user.id))
+        os.makedirs(user_folder, exist_ok=True)
+        
+        # Check if file already exists for this user
+        existing_file = File.query.filter_by(user_id=current_user.id, filename=filename).first()
+        if existing_file:
+             return jsonify({'message': 'File already exists'}), 409
+
+        file.save(os.path.join(user_folder, filename))
+        
+        new_file = File(filename=filename, owner=current_user)
+        db.session.add(new_file)
+        db.session.commit()
+        return jsonify({'message': 'File uploaded successfully'}), 201
+
+@app.route('/api/files', methods=['GET'])
+@token_required
+def get_files(current_user):
+    files = File.query.filter_by(user_id=current_user.id).all()
+    output = []
+    for file in files:
+        file_data = {'filename': file.filename}
+        output.append(file_data)
+    return jsonify({'files': output})
+
+@app.route('/api/download/<filename>', methods=['GET'])
+@token_required
+def download_file(current_user, filename):
+    file = File.query.filter_by(user_id=current_user.id, filename=filename).first()
+    if not file:
+        return jsonify({'message': 'File not found'}), 404
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(current_user.id))
+    return send_from_directory(user_folder, filename, as_attachment=True)
+
+@app.route('/api/files/<filename>', methods=['DELETE'])
+@token_required
+def delete_file(current_user, filename):
+    file = File.query.filter_by(user_id=current_user.id, filename=filename).first()
+    if not file:
+        return jsonify({'message': 'File not found'}), 404
+    
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(current_user.id))
+    file_path = os.path.join(user_folder, filename)
+    
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        
+    db.session.delete(file)
+    db.session.commit()
+    return jsonify({'message': 'File deleted'})
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, host='0.0.0.0')
